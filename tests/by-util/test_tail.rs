@@ -1157,6 +1157,18 @@ once
         );
 }
 
+/// An offset that no filesystem can seek to must not panic: `tail -c +N`.
+#[test]
+fn test_positive_bytes_offset_too_large_to_seek() {
+    let (at, mut ucmd) = at_and_ucmd!();
+    // The file must exceed the block size for `tail` to take the seeking path.
+    at.write("big.txt", &"a".repeat(16 * 1024));
+    ucmd.args(&["-c", "+18446744073709551615", "big.txt"])
+        .succeeds()
+        .no_stdout()
+        .no_stderr();
+}
+
 /// Test for reading all but the first NUM lines: `tail -3`.
 #[test]
 fn test_obsolete_syntax_positive_lines() {
