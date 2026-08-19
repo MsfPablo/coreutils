@@ -1650,6 +1650,44 @@ fn test_multibyte_suffix_issue11937() {
         .stdout_is("   692.00€\n");
 }
 
+// https://github.com/uutils/coreutils/issues/13937
+// A multibyte decimal separator (Arabic `٫`, 2 bytes / 1 char) made
+// `find_valid_number_with_suffix` skip past the suffix by *byte* length
+// instead of *character* count, so it misread the suffix and then sliced
+// `&s[..=numeric_part.len()]` inside a multibyte character, panicking
+// ("byte index N is not a char boundary") on the error-reporting path.
+// GNU rejects these inputs with a non-zero exit and no crash.
+#[test]
+#[cfg_attr(wasi_runner, ignore = "WASI: locale env vars not propagated")]
+fn test_multibyte_decimal_separator_no_panic_issue13937() {
+    // `1٫€K`: numeric part `1٫`, garbage `€K` — must fail, not panic.
+    new_ucmd!()
+        .env("LC_ALL", "ar_SA.UTF-8")
+        .args(&["--from=si", "1٫€K"])
+        .fails_with_code(2)
+        .stderr_contains("invalid");
+    // `1٫€Kx`: trailing extra char after the garbage — same path, must not panic.
+    new_ucmd!()
+        .env("LC_ALL", "ar_SA.UTF-8")
+        .args(&["--from=si", "1٫€Kx"])
+        .fails_with_code(2)
+        .stderr_contains("invalid");
+    // `1٫€Ki` with --from=auto: hits the `Some('i')` arm that previously
+    // sliced `..numeric_part.len() + 2` inside the multibyte `€`.
+    new_ucmd!()
+        .env("LC_ALL", "ar_SA.UTF-8")
+        .args(&["--from=auto", "1٫€Ki"])
+        .fails_with_code(2)
+        .stderr_contains("invalid");
+    // Sanity: a valid number with the same multibyte decimal separator
+    // still parses and scales correctly.
+    new_ucmd!()
+        .env("LC_ALL", "ar_SA.UTF-8")
+        .args(&["--from=si", "1٫5K"])
+        .succeeds()
+        .stdout_is("1500\n");
+}
+
 #[test]
 fn test_float_precision_greater_than_16bits() {
     new_ucmd!()

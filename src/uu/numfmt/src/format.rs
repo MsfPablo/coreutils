@@ -59,7 +59,13 @@ fn find_valid_number_with_suffix(s: &str, unit: Unit) -> Option<&str> {
     let accepts_suffix = unit != Unit::None;
     let accepts_i = [Unit::Auto, Unit::Iec(true)].contains(&unit);
 
-    let mut characters = s.chars().skip(numeric_part.len());
+    // `numeric_part.len()` is a *byte* length, but `chars().skip` counts
+    // *characters*. When the numeric part contains a multibyte decimal
+    // separator (e.g. the Arabic `٫`, 2 bytes / 1 char), skipping by byte
+    // length overshoots and misreads the suffix, which then makes the
+    // `&s[..=numeric_part.len()]` slice below land inside a multibyte
+    // character and panic. Skip by character count instead.
+    let mut characters = s.chars().skip(numeric_part.chars().count());
     let potential_suffix = characters.next();
     let potential_i = characters.next();
 
